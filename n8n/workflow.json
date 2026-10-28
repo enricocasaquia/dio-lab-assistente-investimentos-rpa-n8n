@@ -1,0 +1,405 @@
+{
+  "name": "DIO - LAB ASSISTENTE IA",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "f7590e1f-2e55-4a93-9842-02f281e22a57",
+        "authentication": "basicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -160,
+        80
+      ],
+      "id": "7567f070-3287-4eb1-b4df-e30003352106",
+      "name": "Recebe dados via RPA",
+      "webhookId": "f7590e1f-2e55-4a93-9842-02f281e22a57",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "jSbPXuj6DIcO3NI6",
+          "name": "Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        64,
+        80
+      ],
+      "id": "0f90c478-a321-4485-a837-0adcf12bb03c",
+      "name": "Busca dados via Request"
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "body.clientes"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        64,
+        272
+      ],
+      "id": "bfd6e6e0-dced-4a5a-a288-31ba51fb1581",
+      "name": "Agrega valores"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.data;\n\n// Trata tanto quebras de linha reais quanto \"\\n\" literal\nconst csv = raw.replace(/\\\\n/g, '\\n').trim();\n\n// Separa o CSV em campos, respeitando aspas\nfunction parseCSV(text) {\n  const rows = [];\n  let row = [];\n  let field = '';\n  let inQuotes = false;\n\n  for (let i = 0; i < text.length; i++) {\n    const c = text[i];\n\n    if (c === '\"') {\n      if (inQuotes && text[i + 1] === '\"') {\n        field += '\"';\n        i++;\n      } else {\n        inQuotes = !inQuotes;\n      }\n    } else if (c === ',' && !inQuotes) {\n      row.push(field);\n      field = '';\n    } else if ((c === '\\n' || c === '\\r') && !inQuotes) {\n      if (c === '\\r' && text[i + 1] === '\\n') i++;\n\n      row.push(field);\n      if (row.some(v => v.trim() !== '')) rows.push(row);\n\n      row = [];\n      field = '';\n    } else {\n      field += c;\n    }\n  }\n\n  if (field !== '' || row.length > 0) {\n    row.push(field);\n    rows.push(row);\n  }\n\n  return rows;\n}\n\nconst rows = parseCSV(csv);\nconst headers = rows[0].map(h => h.trim());\n\nreturn rows.slice(1).map(row => ({\n  json: Object.fromEntries(\n    headers.map((header, i) => [\n      header,\n      (row[i] ?? '').trim()\n    ])\n  )\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        80
+      ],
+      "id": "0ca4f942-3af9-4aae-a52c-c76244bcaa7f",
+      "name": "Transforma em CSV"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "clientes[0]",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        288,
+        272
+      ],
+      "id": "ace40e92-c244-4394-a20b-ea72031c60fe",
+      "name": "Lista informações"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "perfil",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        560,
+        160
+      ],
+      "id": "0742d77c-4068-4bfe-9292-78158f5fb090",
+      "name": "Realiza join entre bases"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b7ba76b1-a1a2-46c5-94d6-ef7aba739973",
+              "leftValue": "={{ Number($json.saldo.replace('R$', '').replace(/\\./g, '').replace(',', '.').trim()) }}",
+              "rightValue": "={{ $json.minimo.toNumber() }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        784,
+        160
+      ],
+      "id": "2ba35d2e-f680-4a05-ba9f-5ab2ea6c1ef6",
+      "name": "Exclui casos"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6bec81b9-0066-467a-a1ef-6d0802493348",
+              "name": "pessoas",
+              "value": "={{ $json.nome }} ({{ $json.email }}) com perfil {{ $json.perfil }} possui {{ $json.saldo }} disponíveis para investir no produto {{ $json.produto }} com taxas de rendimento de {{ $json.rentabilidade }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        992,
+        160
+      ],
+      "id": "241e37bb-d99d-4304-ad69-942a71349996",
+      "name": "Monta resumo do cliente"
+    },
+    {
+      "parameters": {
+        "operation": "html",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1184,
+        160
+      ],
+      "id": "77ea8748-cba3-48ee-85d5-68f32ea0316c",
+      "name": "Gera HTML das pessoas"
+    },
+    {
+      "parameters": {
+        "resource": "document",
+        "modelId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "",
+          "cachedResultUrl": ""
+        },
+        "text": "O seguinte documento possui uma lista de clientes e seus possíveis investimentos. Gere um resultado apontando o melhor investimento em cada caso e o motivo por trás disso.",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1376,
+        160
+      ],
+      "id": "9b030f7e-a3bb-4383-8225-d551d64bc12e",
+      "name": "Analisa HTML das pessoas"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "24c3e103-7f95-47bf-b57a-8ef2eaa4d4d6",
+              "name": "=markdown",
+              "value": "={{ $json.content.parts[0].text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1600,
+        160
+      ],
+      "id": "bad20fce-e384-4e44-9890-a0115b126278",
+      "name": "Extrai Markdown"
+    },
+    {
+      "parameters": {
+        "mode": "markdownToHtml",
+        "markdown": "={{ $json.markdown }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.markdown",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        160
+      ],
+      "id": "ea8640aa-5a3b-4f6b-998c-9e544a37901e",
+      "name": "Gera HTML a partir do markdown"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "data",
+        "options": {
+          "fileName": "relatorio_investimentos.html"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2048,
+        160
+      ],
+      "id": "2f2b2198-3b5c-4f82-bec2-5b3576a94ef0",
+      "name": "Gera arquivo final de resumo"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Recebe dados via RPA": {
+      "main": [
+        [
+          {
+            "node": "Agrega valores",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Busca dados via Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca dados via Request": {
+      "main": [
+        [
+          {
+            "node": "Transforma em CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrega valores": {
+      "main": [
+        [
+          {
+            "node": "Lista informações",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transforma em CSV": {
+      "main": [
+        [
+          {
+            "node": "Realiza join entre bases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lista informações": {
+      "main": [
+        [
+          {
+            "node": "Realiza join entre bases",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Realiza join entre bases": {
+      "main": [
+        [
+          {
+            "node": "Exclui casos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exclui casos": {
+      "main": [
+        [
+          {
+            "node": "Monta resumo do cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta resumo do cliente": {
+      "main": [
+        [
+          {
+            "node": "Gera HTML das pessoas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gera HTML das pessoas": {
+      "main": [
+        [
+          {
+            "node": "Analisa HTML das pessoas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analisa HTML das pessoas": {
+      "main": [
+        [
+          {
+            "node": "Extrai Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrai Markdown": {
+      "main": [
+        [
+          {
+            "node": "Gera HTML a partir do markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gera HTML a partir do markdown": {
+      "main": [
+        [
+          {
+            "node": "Gera arquivo final de resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "85e75286-fa04-4664-9799-45dcce1b37c4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4cf152daa85d2d82e402cf7f962b48739dd4078c3101b3f6fb786a438f2669fc"
+  },
+  "nodeGroups": [],
+  "id": "EDRJWsNMfgwn6t55",
+  "tags": []
+}
